@@ -1,3 +1,7 @@
+- 분석 기간 : 2023.10.09 ~ 10.10
+- 분석 수행자 : IT융합자율학부 23 박혜미
+- 분석 환경 : Oracle VM VirualBox 22.04 가상머신
+
 ## 개요 용어 정리
 - `PoC(Proof of Concept)` : 새로운 프로젝트가 실제로 실현 가능성이 있는가, 효과와 효용, 기술적인 관점에서부터 검증을 하는 과정을 의미
   
@@ -21,6 +25,17 @@ ex. 한 스레드와 또 다른 스레드가 동시에 한 변수를 쓰려고 �
 <br/>
 
 - `Reversing(Reverse Engineering)` : 이미 만들어진 시스템을 역으로 추적하여 처음의 문서나 설계기법 등의 자료를 얻어 내는 일을 말함. 어던 장치나 시스템 등의 구조, 기능, 동작을 분석하고 원리를 이해하여 단점을 보완하고 새로운 아이디어를 추가하는 작업을 의미
+
+<br/>
+
+- `vmlinux` : 압축되지 않은 커널 이미지를 ELF 형식으로 담고 있는 정적 링크된 실행파일. 사실상 커널 그 자체. 심볼 제거하고, 압축을 하여 크기를 줄인 뒤, 부팅에 관계된 코드까지 넣어야 부팅 가능한 이미지가 됨
+- `symbol table` : 컴파일러 또는 인터프리터 같은 언어 변환기에서 사용되는 데이터 구조
+- vmlinux 파일에서 심볼을 뽑아내면 System.map파일이 됨
+
+<br/>
+
+- `rootfs` : 파일 시스템을 뜻함. 리눅스 파일 시스템을 미리 패키지화 해놓은 바이너리(이진법).
+- 
 
 ---
 # QEMU 설치
@@ -193,3 +208,150 @@ sudo apt install virt-manager
 - QEMU가 모두 설정되었으므로 테스트 진행
 - 원하는 운영 체제를 설치하고 VM 구성을 시험해 보며 가장 적합한 것을 찾음
 ex. Manjaro와 같은 Linux 배포판
+
+---
+---
+
+# rootfs 굽기
+## debootstrap 설치
+```bash
+sudo apt-get install debootstrap    # debootstrap을 사용하고 rootfs를 만들고 초기화함
+```
+- `debootstrap` : Debian 루트 파일 시스템(rootfs)을 만들고 초기화하기 위해 사용됨.
+- 리눅스 시스템 설치할 때에 debootstrap은 빈 디렉토리에 새로운 Debian 루트 파일 시스템을 생성할 수 있으며, 이를 사용하여 새로운 리눅스 시스템을 설치함.
+- `Debian` : 무료 및 오픈 소스 소프트웨어로 구성된 컴퓨터 운영 체제인 Debain GNU/Linux를 개발하고 유지 관리하는 프로젝트와 커뮤니티를 가리키는 용어.
+
+<br/>
+
+```bash
+sudo mkdir /ubuntu-rootfs
+```
+- `mkdir` : make directory의 약어. 디렉터리를 생성한다는 명령어.
+- `\ubuntu-rootfs` : 생성하려는 디렉터리의 경로. 이것은 루트 디렉터리(/) 아래에 ubuntu-rootfs라는 이름의 디렉터리를 생성하겠다는 의미.
+
+<br/>
+
+```bash
+sudo debootstrap --arch=amd64 bionic /ubuntu-rootfs http://archive.ubuntu.com/ubuntu/
+```
+- `--arch=amd64` : 생성할 시스템 아키텍처를 지정. 여기선 64bit 아키텍처인 amd64를 사용
+- `bionic` : 생성하려는 우분투 버전의 코드명 또는 이름.
+- `/http://archive.ubuntu.com/ubuntu/` : 우분투 패키지 저장소의 URL을 지정함. debootstrap은 이 저장소에서 필요한 패키지를 다운로드하여 새로운 파일 시스템을 구성.
+- -> 위 명령어는 Ubutu 18.04 LTS 버전의 rootfs을 생성하고 /ubuntu-rootfs 디렉터리에 설치함
+
+<br/>
+
+```bash
+git clone https://github.com/mirror/busybox.git cd busybox make menuconfig
+```
+- `make menuconfig` : 소스 코드 디렉터리 내에서 실행. (busybow 프로젝트의 소스 코드 디렉터리에 들어간 후 실행)
+
+<br/>
+
+## chroot로 진입
+```bash
+sudo chroot /ubuntu-rootfs
+```
+- chroot 환경에서 루트 패스워드를 설정
+- passwd : Chroot에서 빠져나오기
+- exit : rootfs 마운트 해제(선택 사항)
+
+## 가상 머신 만들기
+```bash
+qemu-img create -f qcow2 vm-disk.img 10G          # vm-disk.img 생성
+qemu-kvm -name my-vm -machine pc-i440fx-2.9 -m 2048 -drive file=vm-disk.img,format=qcow2 -cpu host -nographic -daemonize -monitor tcp:127.0.0.1:12345,server,nowait
+```
+- `qemu-kvm` : QEMU-KVM은 가상화를 위한 오픈 소스 소프트웨어로, 가상 머신을 생성하고 실행하는 데 사용
+- `-name my-vm` : 가상 머신의 이름을 "my-vm"으로 설정
+- `-machine pc-i440fx-2.9` : 가상 머신의 하드웨어 모델을 지정. 여기선 pc-i440fx-2.9 모델을 사용
+- `-m 2048` : 가상 머신에 할당할 메모리 크기를 설정
+- `drive file=vm-disk.img,format=qcow2` : 가상 머신에 연결할 디스크 이미지를 지정함. vm-disk.img 파일을 사용하고 있으며, 이미지 형식은 qcow2로 지정되어 있음
+- `-cpu host` : 호스트 시스템의 CPU 모델을 사용하여 가상 머신을 실행하도록 지정. 이를 통해 호스트 시스템의 CPU 확장 명령 집합을 사용할 수 있음
+- `-nographic` : 그래픽 디스플레이를 사용하지 않고 텍스트 모드에서 가상 머신을 실행하도록 설정. 즉, 터미널에서 가상 머신을 제어.
+- `-daemonize` : 가상 머신을 백그라운드에서 실행하도록 설정
+- `-monitor tcp:127.0.0.1:12345,server,nowait` : QEMU 모니터를 사용하여 가상 머신을 제어할 수 있는 TCP 서버를 실행하도록 설정 로컬 호스트의 12345 포트를 사용하며, server 및 nowait 옵션을 사용하여 연결을 받고 대기하도록 함.
+
+```bash
+sudo apt-get install qemu-kvm    # qemu-kvm 설치
+sudo modprobe kvm                # kvm 모듈을 로드
+qemu-system-x86_64 -name my-vm -machine pc-i440fx-2.9 -m 2048 -drive file=vm-disk.img,format=qcow2 -cpu host -nographic -daemonize -monitor tcp:127.0.0.1:12345,server,nowait
+```
+
+## rootfs.img 생성
+```bash
+# rootfs.img 파일명과 크기를 지정
+image_file="rootfs.img"
+image_size="1G"
+
+# 이미지 파일을 생성
+dd if=/dev/zero of="$image_file" bs=1 count=0 seek="$image_size"
+
+# 이미지 파일에 파일 시스템을 생성. (여기서는 ext4를 사용)
+mkfs.ext4 "$image_file"
+
+# 이미지 파일을 임시 디렉토리에 마운트.
+mnt_dir=$(mktemp -d)
+sudo mount "$image_file" "$mnt_dir"
+
+# 이미지 파일에 원하는 파일을 추가하기 위해 임시 디렉토리 내에 필요한 디렉토리를 생성.
+sudo mkdir -p "$mnt_dir/etc"
+# 예를 들어, /etc/passwd 파일을 추가하는 예시입니다.
+sudo cp /etc/passwd "$mnt_dir/etc/passwd"
+
+# 마운트를 해제하고 임시 디렉토리를 삭제.
+sudo umount "$mnt_dir"
+rmdir "$mnt_dir"
+```
+
+## root.sh 생성
+```bash
+nano root.sh    # 쉘 스크립트 파일 생성
+
+ech "Hello, World!"
+```
+- Ctrl+0을 눌러 저장, Ctrl+X를 눌러 종료
+```bash
+chmod +x root.sh      # 스크립트 파일을 실행 가능한 파일로 만들기 위해 실행 권한을 부여
+./root.sh             # 스크립트를 실행
+```
+- 만든 해당 스크립트에
+> i <br/>
+in <br/>
+insert <br/>
+echo "This is my custom root.sh script." <br/>
+chmod +x root.sh <br/>
+mv root.sh ~/root.sh <br/>
+
+를 작성
+
+## root.ios 생성
+```bash
+sudo mkdir /mnt/cdrom               # CD/DVD 드라이브 마운트: 이제 다시 CD/DVD 드라이브를 마운트
+sudo mount /dev/cdrom /mnt/cdrom    # 디렉토리로 이동: 마운트가 성공적으로 수행되면 다음 명령어를 사용하여 "/mnt/cdrom" 디렉토리로 이동
+cd /mnt/cdrom
+sudo mount /dev/cdrom /mnt/cdrom    # "root.iso" 이미지가 마운트되었으므로 해당 디렉토리로 이동.
+cd /mnt/cdrom                       # ROOT 프레임워크를 설치
+```
+
+## rootfs.img, root.sh, root.ios를 하나의 파일로 굽기
+```bash
+# 작업 디렉토리 경로를 절대 경로로 지정
+work_dir="$(readlink -f /home/user/my_project)"
+
+# 생성할 ISO 이미지 파일명
+iso_file="my_combined_image.iso"
+
+# ISO 이미지 생성을 위한 임시 디렉토리
+temp_dir="$(mktemp -d)"
+
+# root.iso, root.sh, rootfs.img 파일을 임시 디렉토리로 복사
+cp "$work_dir/home/roalzlwm/root.iso" "$temp_dir/"
+cp "$work_dir/home/roalzlwm/root.sh" "$temp_dir/"
+cp "$work_dir/home/roalzlwm/rootfs.img" "$temp_dir/"
+
+# genisoimage을 사용하여 ISO 이미지 생성
+genisoimage -input-charset utf-8 -o "$iso_file" -R -J -l -V "My_Combined_Image" "$temp_dir"
+
+# 임시 디렉토리 삭제
+rm -rf "$temp_dir"
+```
