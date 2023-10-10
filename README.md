@@ -355,3 +355,12 @@ genisoimage -input-charset utf-8 -o "$iso_file" -R -J -l -V "My_Combined_Image" 
 # 임시 디렉토리 삭제
 rm -rf "$temp_dir"
 ```
+
+## linux-6.0 설치
+```bash
+wget https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/snapshot/linux-6.0.tar.gz  # 커널 소스 코드를 다운로드
+tar -xzvf linux-6.0.tar.gz    # 압축파일을 해제하고 linux-6.0 디렉토리를 생성
+```
+- `wget` : 웹에서 파일 다운로드를 도와주는 리눅스 커맨드라인 유틸리티
+- `tar` : 여러 개의 파일을 하나의 파일로 묶거나 풀 때 사용하는 명령어
+  
