@@ -365,3 +365,4 @@ tar -xzvf linux-6.0.tar.gz    # 압축파일을 해제하고 linux-6.0 디렉토
 - `tar` : 여러 개의 파일을 하나의 파일로 묶거나 풀 때 사용하는 명령어
 
 
+git archive --format zip --output out.zip master
